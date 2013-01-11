@@ -57,7 +57,7 @@ struct usb_ctrltransfer {
 
 typedef int USBScanFunc(void *opaque, int bus_num, int addr, const char *port,
                         int class_id, int vendor_id, int product_id,
-                        const char *product_name, int speed);
+                        int serial_id, const char *product_name, int speed);
 
 //#define DEBUG
 
@@ -93,6 +93,7 @@ struct USBAutoFilter {
     char     *port;
     uint32_t vendor_id;
     uint32_t product_id;
+    uint32_t serial_id;
 };
 
 enum USBHostDeviceOptions {
@@ -1511,6 +1512,7 @@ static Property usb_host_dev_properties[] = {
     DEFINE_PROP_STRING("hostport", USBHostDevice, match.port),
     DEFINE_PROP_HEX32("vendorid",  USBHostDevice, match.vendor_id,  0),
     DEFINE_PROP_HEX32("productid", USBHostDevice, match.product_id, 0),
+    DEFINE_PROP_HEX32("serialid",  USBHostDevice, match.serial_id,  0),
     DEFINE_PROP_UINT32("isobufs",  USBHostDevice, iso_urb_count,    4),
     DEFINE_PROP_INT32("bootindex", USBHostDevice, bootindex,        -1),
     DEFINE_PROP_BIT("pipeline",    USBHostDevice, options,
@@ -1553,7 +1555,7 @@ USBDevice *usb_host_device_open(USBBus *bus, const char *devname)
 {
     struct USBAutoFilter filter;
     USBDevice *dev;
-    char *p;
+    char *p, *s;
 
     dev = usb_create(bus, "usb-host");
 
@@ -1567,11 +1569,17 @@ USBDevice *usb_host_device_open(USBBus *bus, const char *devname)
             filter.addr       = strtoul(p + 1, NULL, 0);
             filter.vendor_id  = 0;
             filter.product_id = 0;
+            filter.serial_id  = 0;
         } else if ((p = strchr(devname, ':'))) {
             filter.bus_num    = 0;
             filter.addr       = 0;
             filter.vendor_id  = strtoul(devname, NULL, 16);
             filter.product_id = strtoul(p + 1, NULL, 16);
+            if ((s = strchr(p + 1, ':'))) {
+                filter.serial_id = strtoul(s + 1, NULL, 16);
+            } else {
+                filter.serial_id = 0;
+            }
         } else {
             goto fail;
         }
@@ -1581,6 +1589,7 @@ USBDevice *usb_host_device_open(USBBus *bus, const char *devname)
     qdev_prop_set_uint32(&dev->qdev, "hostaddr",  filter.addr);
     qdev_prop_set_uint32(&dev->qdev, "vendorid",  filter.vendor_id);
     qdev_prop_set_uint32(&dev->qdev, "productid", filter.product_id);
+    //qdev_prop_set_uint32(&dev->qdev, "serialid",  filter.serial_id);
     qdev_init_nofail(&dev->qdev);
     return dev;
 
@@ -1652,11 +1661,12 @@ static int usb_host_scan(void *opaque, USBScanFunc *func)
 {
     DIR *dir = NULL;
     char line[1024];
-    int bus_num, addr, speed, class_id, product_id, vendor_id;
-    int ret = 0;
+    int bus_num, addr, speed, class_id, product_id, vendor_id, serial_id;
+    int ret = -1;
     char port[MAX_PORTLEN];
     char product_name[512];
     struct dirent *de;
+    struct USBAutoFilter filter;
 
     dir = opendir("/sys/bus/usb/devices");
     if (!dir) {
@@ -1699,6 +1709,14 @@ static int usb_host_scan(void *opaque, USBScanFunc *func)
             if (sscanf(line, "%x", &product_id) != 1) {
                 goto the_end;
             }
+            if (!usb_host_read_file(line, sizeof(line), "serial",
+                                    de->d_name)) {
+                serial_id = filter.serial_id;
+            } else {
+                if (sscanf(line, "%x", &serial_id) != 1) {
+                    goto the_end;
+                }
+            }
             if (!usb_host_read_file(line, sizeof(line), "product",
                                     de->d_name)) {
                 *product_name = 0;
@@ -1723,7 +1741,7 @@ static int usb_host_scan(void *opaque, USBScanFunc *func)
             }
 
             ret = func(opaque, bus_num, addr, port, class_id, vendor_id,
-                       product_id, product_name, speed);
+                       product_id, serial_id, product_name, speed);
             if (ret) {
                 goto the_end;
             }
@@ -1742,7 +1760,8 @@ static VMChangeStateEntry *usb_vmstate;
 static int usb_host_auto_scan(void *opaque, int bus_num,
                               int addr, const char *port,
                               int class_id, int vendor_id, int product_id,
-                              const char *product_name, int speed)
+                              int serial_id, const char *product_name,
+                              int speed)
 {
     struct USBAutoFilter *f;
     struct USBHostDevice *s;
@@ -1771,6 +1790,11 @@ static int usb_host_auto_scan(void *opaque, int bus_num,
         if (f->product_id > 0 && f->product_id != product_id) {
             continue;
         }
+
+        if (f->serial_id > 0 && f->serial_id != serial_id) {
+            continue;
+        }
+
         /* We got a match */
         s->seen++;
         if (s->errcount >= 3) {
@@ -1855,7 +1879,7 @@ static void usb_host_auto_check(void *unused)
  */
 static int parse_filter(const char *spec, struct USBAutoFilter *f)
 {
-    enum { BUS, DEV, VID, PID, DONE };
+    enum { BUS, DEV, VID, PID, SID, DONE };
     const char *p = spec;
     int i;
 
@@ -1863,6 +1887,7 @@ static int parse_filter(const char *spec, struct USBAutoFilter *f)
     f->addr       = 0;
     f->vendor_id  = 0;
     f->product_id = 0;
+    f->serial_id  = 0;
 
     for (i = BUS; i < DONE; i++) {
         p = strpbrk(p, ":.");
@@ -1879,6 +1904,7 @@ static int parse_filter(const char *spec, struct USBAutoFilter *f)
         case DEV: f->addr    = strtol(p, NULL, 10);    break;
         case VID: f->vendor_id  = strtol(p, NULL, 16); break;
         case PID: f->product_id = strtol(p, NULL, 16); break;
+        case SID: f->serial_id  = strtol(p, NULL, 16); break;
         }
     }
 
@@ -1929,7 +1955,7 @@ static const char *usb_class_str(uint8_t class)
 static void usb_info_device(Monitor *mon, int bus_num,
                             int addr, const char *port,
                             int class_id, int vendor_id, int product_id,
-                            const char *product_name,
+                            int serial_id, const char *product_name,
                             int speed)
 {
     const char *class_str, *speed_str;
@@ -1960,7 +1986,8 @@ static void usb_info_device(Monitor *mon, int bus_num,
     } else {
         monitor_printf(mon, "    Class %02x:", class_id);
     }
-    monitor_printf(mon, " USB device %04x:%04x", vendor_id, product_id);
+    monitor_printf(mon, " USB device %04x:%04x:%04x", vendor_id, product_id,
+                   serial_id);
     if (product_name[0] != '\0') {
         monitor_printf(mon, ", %s", product_name);
     }
@@ -1970,13 +1997,13 @@ static void usb_info_device(Monitor *mon, int bus_num,
 static int usb_host_info_device(void *opaque, int bus_num, int addr,
                                 const char *path, int class_id,
                                 int vendor_id, int product_id,
-                                const char *product_name,
+                                int serial_id, const char *product_name,
                                 int speed)
 {
     Monitor *mon = opaque;
 
     usb_info_device(mon, bus_num, addr, path, class_id, vendor_id, product_id,
-                    product_name, speed);
+                    serial_id, product_name, speed);
     return 0;
 }
 
@@ -2011,13 +2038,14 @@ void usb_host_info(Monitor *mon)
 
     monitor_printf(mon, "  Auto filters:\n");
     QTAILQ_FOREACH(s, &hostdevs, next) {
-        char bus[10], addr[10], vid[10], pid[10];
+        char bus[10], addr[10], vid[10], pid[10], sid[10];
         f = &s->match;
         dec2str(f->bus_num, bus, sizeof(bus));
         dec2str(f->addr, addr, sizeof(addr));
         hex2str(f->vendor_id, vid, sizeof(vid));
         hex2str(f->product_id, pid, sizeof(pid));
-        monitor_printf(mon, "    Bus %s, Addr %s, Port %s, ID %s:%s\n",
-                       bus, addr, f->port ? f->port : "*", vid, pid);
+        hex2str(f->serial_id, sid, sizeof(sid));
+        monitor_printf(mon, "    Bus %s, Addr %s, Port %s, ID %s:%s:%s\n", 
+                       bus, addr, f->port ? f->port : "*", vid, pid, sid);
     }
 }
