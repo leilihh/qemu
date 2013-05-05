@@ -2794,7 +2794,7 @@ typedef struct {
     uint8_t *cbuf;
 } RingBufCharDriver;
 
-static size_t ringbuf_count(const CharDriverState *chr)
+size_t ringbuf_count(const CharDriverState *chr)
 {
     const RingBufCharDriver *d = chr->opaque;
 

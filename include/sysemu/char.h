@@ -295,6 +295,8 @@ void qemu_chr_close_mem(CharDriverState *chr);
 QString *qemu_chr_mem_to_qs(CharDriverState *chr);
 size_t qemu_chr_mem_osize(const CharDriverState *chr);
 
+size_t ringbuf_count(const CharDriverState *chr);
+
 CharDriverState *qemu_char_get_next_serial(void);
 
 /* msmouse */

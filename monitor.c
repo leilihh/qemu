@@ -261,6 +261,21 @@ int monitor_read_password(Monitor *mon, ReadLineFunc *readline_func,
     }
 }
 
+int monitor_read_console(Monitor *mon, const char *device,
+                         ReadLineFunc *readline_func, void *opaque)
+{
+    char prompt[60];
+
+    if (!mon->rs) {
+        return -1;
+    }
+
+    snprintf(prompt, sizeof(prompt), "%s: ", device);
+    readline_start(mon->rs, prompt, 0, readline_func, opaque);
+
+    return 0;
+}
+
 static gboolean monitor_unblocked(GIOChannel *chan, GIOCondition cond,
                                   void *opaque)
 {

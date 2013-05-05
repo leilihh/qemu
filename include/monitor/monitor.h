@@ -87,6 +87,9 @@ ReadLineState *monitor_get_rs(Monitor *mon);
 int monitor_read_password(Monitor *mon, ReadLineFunc *readline_func,
                           void *opaque);
 
+int monitor_read_console(Monitor *mon, const char *device,
+                         ReadLineFunc *readline_func, void *opaque);
+
 int qmp_qom_set(Monitor *mon, const QDict *qdict, QObject **ret);
 
 int qmp_qom_get(Monitor *mon, const QDict *qdict, QObject **ret);
