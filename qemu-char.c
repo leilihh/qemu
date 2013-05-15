@@ -3138,6 +3138,7 @@ static void qemu_chr_parse_file_out(QemuOpts *opts, ChardevBackend *backend,
         error_setg(errp, "chardev: file: no filename given");
         return;
     }
+    fprintf(stderr, "qemu_chr_parse_file_out: path=%s\n", path);
     backend->file = g_new0(ChardevFile, 1);
     backend->file->out = g_strdup(path);
 }
@@ -3259,10 +3260,10 @@ CharDriverState *qemu_chr_new_from_opts(QemuOpts *opts,
     }
     for (i = backends; i; i = i->next) {
         cd = i->data;
-
         if (strcmp(cd->name, qemu_opt_get(opts, "backend")) == 0) {
             break;
         }
+        fprintf(stderr, "qemu_chr_new_from_opts:backend=%s\n",cd->name);
     }
     if (i == NULL) {
         error_setg(errp, "chardev: backend \"%s\" not found",
@@ -3308,6 +3309,9 @@ CharDriverState *qemu_chr_new_from_opts(QemuOpts *opts,
         }
 
         chr = qemu_chr_find(id);
+        if (!chr->filename) {
+            chr->filename = g_strdup(qemu_opt_get(opts, "backend"));
+        }
 
     qapi_out:
         qapi_free_ChardevBackend(backend);
@@ -3466,6 +3470,18 @@ ChardevInfoList *qmp_query_chardev(Error **errp)
     return chr_list;
 }
 
+char *qmp_chardev_find(const char *name, Error **errp)
+{
+    CharDriverState *chr;
+
+    QTAILQ_FOREACH(chr, &chardevs, next) {
+        if (strcmp(chr->label, name) != 0)
+            continue;
+        return chr->filename;
+    }
+    return NULL;
+}
+
 CharDriverState *qemu_chr_find(const char *name)
 {
     CharDriverState *chr;
@@ -3593,6 +3609,7 @@ static CharDriverState *qmp_chardev_open_file(ChardevFile *file, Error **errp)
 static CharDriverState *qmp_chardev_open_serial(ChardevHostdev *serial,
                                                 Error **errp)
 {
+    fprintf(stderr, "qmp_chardev_open_serial: device=%s\n", serial->device);
     return qemu_chr_open_win_path(serial->device);
 }
 

@@ -378,6 +378,15 @@
 { 'command': 'query-chardev', 'returns': ['ChardevInfo'] }
 
 ##
+# @chardev-find:
+#
+# Returns filename of chardev.
+#
+##
+{ 'command': 'chardev-find', 'data': {'filename': 'str'},
+  'returns': 'str' }
+
+##
 # @DataFormat:
 #
 # An enumeration of data format.

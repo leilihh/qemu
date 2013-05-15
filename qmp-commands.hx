@@ -1667,6 +1667,20 @@ EQMP
     },
 
 SQMP
+chardev-find
+------------
+
+Find the filename of chardev.
+
+EQMP
+
+    {
+        .name       = "chardev-find",
+        .args_type  = "",
+        .mhandler.cmd_new = qmp_marshal_input_chardev_find,
+    },
+
+SQMP
 query-block
 -----------
 
