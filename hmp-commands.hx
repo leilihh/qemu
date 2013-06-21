@@ -989,6 +989,23 @@ STEXI
 Set the spice/vnc connection info for the migration target.  The spice/vnc
 server will ask the spice/vnc client to automatically reconnect using the
 new parameters (if specified) once the vm migration finished successfully.
+
+ETEXI
+
+    {
+        .name       = "localhost_migrate",
+        .args_type  = "uri:s",
+        .params     = "uri",
+        .help       = "migrate to domain socket URI on localhost",
+        .mhandler.cmd = hmp_localhost_migrate,
+    },
+
+
+STEXI
+@item localhost_migrate @var{uri}
+@findex localhost_migrate
+Migrate to @var{uri}.
+
 ETEXI
 
     {

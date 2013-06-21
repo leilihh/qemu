@@ -524,6 +524,19 @@ uint64_t ram_bytes_total(void)
     return total;
 }
 
+void ram_madvise_free(ram_addr_t size)
+{
+    void *ram;
+    RAMBlock *block = NULL;
+
+    ram = memory_region_get_ram_ptr(block->mr);
+
+    /* XXX. Here just simplely madvise(.., MADV_DONTNEED) the whole ram
+     * pages, need more work to keep MADV_DONTNEED ram pages that
+     * already sent. */
+    qemu_madvise(ram, size, MADV_DONTNEED);
+}
+
 static void migration_end(void)
 {
     if (migration_bitmap) {

@@ -49,6 +49,19 @@ void unix_start_outgoing_migration(MigrationState *s, const char *path, Error **
     unix_nonblocking_connect(path, unix_wait_for_connect, s, errp);
 }
 
+void unix_start_local_outgoing_migration(LocalMigState *s, const char *path, Error **errp)
+{
+    s->fd = unix_connect(path, errp);
+    if (s->fd < 0) {
+        s->file = NULL;
+        /* There should be a fd_error_set function */
+        s->state = MIG_STATE_ERROR;
+    } else {
+        s->file = qemu_fopen_socket(s->fd, "wb");
+        migrate_fd_connect_local(s);
+    }
+}
+
 static void unix_accept_incoming_migration(void *opaque)
 {
     struct sockaddr_un addr;
@@ -94,4 +107,51 @@ void unix_start_incoming_migration(const char *path, Error **errp)
 
     qemu_set_fd_handler2(s, NULL, unix_accept_incoming_migration, NULL,
                          (void *)(intptr_t)s);
+}
+
+static void unix_accept_local_incoming_migration(void *opaque)
+{
+    struct sockaddr_un addr;
+    socklen_t addrlen = sizeof(addr);
+    int s = (intptr_t)opaque;
+    QEMUFile *f;
+    int c;
+
+    do {
+        c = qemu_accept(s, (struct sockaddr *)&addr, &addrlen);
+    } while (c == -1 && errno == EINTR);
+    qemu_set_fd_handler2(s, NULL, NULL, NULL, NULL);
+    close(s);
+
+    DPRINTF("accepted migration\n");
+
+    if (c == -1) {
+        fprintf(stderr, "could not accept migration connection\n");
+        goto out;
+    }
+
+    f = qemu_fopen_socket(c, "rb");
+    if (f == NULL) {
+        fprintf(stderr, "could not qemu_fopen socket\n");
+        goto out;
+    }
+
+    start_local_incoming_migration(f);
+    return;
+
+out:
+    close(c);
+}
+
+void unix_start_local_incoming_migration(const char *path, Error **errp)
+{
+    int ret;
+
+    ret = unix_listen(path, NULL, 0, errp);
+    if (ret < 0) {
+        return;
+    }
+
+    qemu_set_fd_handler2(ret, NULL, unix_accept_local_incoming_migration, NULL,
+                         (void *)(intptr_t)ret);
 }

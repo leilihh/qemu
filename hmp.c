@@ -1191,6 +1191,19 @@ void hmp_migrate(Monitor *mon, const QDict *qdict)
     }
 }
 
+void hmp_localhost_migrate(Monitor *mon, const QDict *qdict)
+{
+    const char *uri = qdict_get_str(qdict, "uri");
+    Error *errp = NULL;
+
+    qmp_localhost_migrate(uri, &errp);
+    if (errp) {
+        monitor_printf(mon, "local_migrate: %s\n", error_get_pretty(errp));
+        error_free(errp);
+        return;
+    }
+}
+
 void hmp_device_del(Monitor *mon, const QDict *qdict)
 {
     const char *id = qdict_get_str(qdict, "id");

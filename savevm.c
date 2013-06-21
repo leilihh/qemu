@@ -2006,7 +2006,7 @@ static int qemu_savevm_state(QEMUFile *f)
     return ret;
 }
 
-static int qemu_save_device_state(QEMUFile *f)
+int qemu_save_device_state(QEMUFile *f)
 {
     SaveStateEntry *se;
 

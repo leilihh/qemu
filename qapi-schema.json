@@ -2336,6 +2336,20 @@
 { 'command': 'migrate',
   'data': {'uri': 'str', '*blk': 'bool', '*inc': 'bool', '*detach': 'bool' } }
 
+##
+# @localhost-migrate
+#
+# Migrates the current running guest to the localhost VM.
+#
+# @uri: the Uniform Resource Identifier of the destination VM
+#
+# Returns: nothing on success
+#
+# Since: 1.7
+##
+{ 'command': 'localhost-migrate',
+  'data': {'uri': 'str'} }
+
 # @xen-save-devices-state:
 #
 # Save the state of all devices to file. The RAM and the block devices

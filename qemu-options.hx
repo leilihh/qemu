@@ -2912,6 +2912,15 @@ STEXI
 Prepare for incoming migration, listen on @var{port}.
 ETEXI
 
+DEF("incoming-local", HAS_ARG, QEMU_OPTION_incoming_local, \
+    "-incoming-local p prepare for localhost incoming migration, listen on domain unix socket p\n",
+    QEMU_ARCH_ALL)
+STEXI
+@item -incoming-local @var{port}
+@findex -incoming-local
+Prepare for localhost incoming migration, listen on @var{port}
+ETEXI
+
 DEF("nodefaults", 0, QEMU_OPTION_nodefaults, \
     "-nodefaults     don't create default devices\n", QEMU_ARCH_ALL)
 STEXI

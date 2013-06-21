@@ -21,10 +21,19 @@
 #include "qapi/error.h"
 #include "migration/vmstate.h"
 #include "qapi-types.h"
+#include "exec/memory.h"
 
 struct MigrationParams {
     bool blk;
     bool shared;
+};
+
+enum {
+    MIG_STATE_ERROR,
+    MIG_STATE_SETUP,
+    MIG_STATE_CANCELLED,
+    MIG_STATE_ACTIVE,
+    MIG_STATE_COMPLETED,
 };
 
 typedef struct MigrationState MigrationState;
@@ -49,9 +58,24 @@ struct MigrationState
     int64_t xbzrle_cache_size;
 };
 
+
+typedef struct LocalMigState LocalMigState;
+
+struct LocalMigState
+{
+    int fd;
+    int state;
+    QEMUFile *file;
+    QemuThread thread;
+};
+
 void process_incoming_migration(QEMUFile *f);
 
 void qemu_start_incoming_migration(const char *uri, Error **errp);
+
+void start_local_incoming_migration(QEMUFile *f);
+
+void qemu_start_local_incoming_migration(const char *uri, Error **errp);
 
 uint64_t migrate_max_downtime(void);
 
@@ -69,7 +93,11 @@ void tcp_start_outgoing_migration(MigrationState *s, const char *host_port, Erro
 
 void unix_start_incoming_migration(const char *path, Error **errp);
 
+void unix_start_local_incoming_migration(const char *path, Error **errp);
+
 void unix_start_outgoing_migration(MigrationState *s, const char *path, Error **errp);
+
+void unix_start_local_outgoing_migration(LocalMigState *s, const char *path, Error **errp);
 
 void fd_start_incoming_migration(const char *path, Error **errp);
 
@@ -78,6 +106,8 @@ void fd_start_outgoing_migration(MigrationState *s, const char *fdname, Error **
 void migrate_fd_error(MigrationState *s);
 
 void migrate_fd_connect(MigrationState *s);
+
+void migrate_fd_connect_local(LocalMigState *s);
 
 int migrate_fd_close(MigrationState *s);
 
@@ -91,6 +121,8 @@ MigrationState *migrate_get_current(void);
 uint64_t ram_bytes_remaining(void);
 uint64_t ram_bytes_transferred(void);
 uint64_t ram_bytes_total(void);
+
+void ram_madvise_free(ram_addr_t size);
 
 extern SaveVMHandlers savevm_ram_handlers;
 

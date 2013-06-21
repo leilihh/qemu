@@ -640,6 +640,28 @@ Notes:
 EQMP
 
     {
+        .name      = "localhost-migrate",
+        .args_type = "uri:s",
+        .mhandler.cmd_new = qmp_marshal_input_localhost_migrate,
+    },
+
+SQMP
+localhost-migrate
+
+Migrate VM in localhost.
+
+Arguments:
+
+- "uri": Destination URI (json-string)
+
+Example:
+
+-> { "execute": "localhost-migrate", "arguments": { "uri": "UNIX-SOCKET" }
+<- { "return": {} }
+
+EQMP
+
+    {
         .name       = "migrate_cancel",
         .args_type  = "",
         .mhandler.cmd_new = qmp_marshal_input_migrate_cancel,

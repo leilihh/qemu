@@ -35,14 +35,6 @@
     do { } while (0)
 #endif
 
-enum {
-    MIG_STATE_ERROR,
-    MIG_STATE_SETUP,
-    MIG_STATE_CANCELLED,
-    MIG_STATE_ACTIVE,
-    MIG_STATE_COMPLETED,
-};
-
 #define MAX_THROTTLE  (32 << 20)      /* Migration speed throttling */
 
 /* Amount of time to allocate to each "chunk" of bandwidth-throttled
