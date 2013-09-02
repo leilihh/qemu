@@ -1521,3 +1521,113 @@ void hmp_qemu_io(Monitor *mon, const QDict *qdict)
 
     hmp_handle_error(mon, &err);
 }
+
+typedef struct ConsoleStatus
+{
+    QEMUTimer *timer;
+    Monitor *mon;
+    CharDriverState *chr;
+} ConsoleStatus;
+
+enum escape_char
+{
+    ESCAPE_CHAR_CTRL_GS = 0x1d /* ctrl-] is used for escape */
+};
+
+static void hmp_read_ringbuf_cb(void *opaque)
+{
+    ConsoleStatus *status = opaque;
+    char *data;
+    int len;
+    Error *err = NULL;
+
+    len = ringbuf_count(status->chr);
+    if (len) {
+        data = qmp_ringbuf_read(status->chr->label, len, 0, 0, &err);
+        if (err) {
+            monitor_printf(status->mon, "%s\n", error_get_pretty(err));
+            error_free(err);
+            return;
+        }
+        ringbuf_print_help(status->mon, data);
+        monitor_flush(status->mon);
+        g_free(data);
+        timer_mod(status->timer, qemu_clock_get_ms(QEMU_CLOCK_REALTIME) + 1000);
+    } else {
+        timer_del(status->timer);
+    }
+
+    monitor_resume(status->mon);
+    g_free(status);
+}
+
+static void hmp_write_console(Monitor *mon, void *opaque)
+{
+    CharDriverState *chr = opaque;
+    ConsoleStatus *status;
+
+    status = g_malloc0(sizeof(*status));
+    status->mon = mon;
+    status->chr = chr;
+    status->timer = timer_new_ms(QEMU_CLOCK_REALTIME, hmp_read_ringbuf_cb,
+                                 status);
+    timer_mod(status->timer, qemu_clock_get_ms(QEMU_CLOCK_REALTIME));
+}
+
+static void hmp_read_console(Monitor *mon, const char *data,
+                             void *opaque)
+{
+    CharDriverState *chr = opaque;
+    enum escape_char console_escape = ESCAPE_CHAR_CTRL_GS;
+    int len = strlen(data) + 1;
+    char *tmp_buf = g_malloc0(len);
+    int i;
+    Error *err = NULL;
+
+    for (i = 0; data[i]; i++) {
+        if (data[i] == console_escape) {
+            monitor_read_command(mon, 1);
+            goto out;
+        }
+        tmp_buf[i] = data[i];
+    }
+
+    qmp_ringbuf_write(chr->label, tmp_buf, 0, 0, &err);
+    if (err) {
+        monitor_printf(mon, "%s\n", error_get_pretty(err));
+        monitor_read_command(mon, 1);
+        error_free(err);
+        goto out;
+    }
+
+out:
+    g_free(tmp_buf);
+    return;
+}
+
+void hmp_console(Monitor *mon, const QDict *qdict)
+{
+    const char *device = qdict_get_str(qdict, "chardev");
+    CharDriverState *chr;
+    Error *err = NULL;
+
+    chr = qemu_chr_find(device);
+    if (!chr) {
+        error_set(&err, QERR_DEVICE_NOT_FOUND, device);
+        goto out;
+    }
+
+    if (monitor_suspend(mon)) {
+        monitor_printf(mon, "Failed to suspend console\n");
+        return;
+    }
+
+    hmp_write_console(mon, chr);
+
+    if (monitor_read_console(mon, device, hmp_read_console, chr) < 0) {
+        monitor_printf(mon, "Connect to console %s failed\n", device);
+    }
+
+out:
+    hmp_handle_error(mon, &err);
+}

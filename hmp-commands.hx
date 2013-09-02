@@ -876,6 +876,27 @@ stops because the size limit is reached.
 ETEXI
 
     {
+        .name       = "console",
+        .args_type  = "chardev:s",
+        .params     = "chardev",
+        .mhandler.cmd = hmp_console,
+    },
+
+STEXI
+@item console @var{device}
+@findex console
+Connect to the serial console from within the monitor, allow to read and
+write data from/to ringbuf device @var{chardev}. Exit from the console and
+return back to monitor by 'ctrl-]'.
+
+@example
+(qemu) console foo
+foo: data string...
+@end example
+
+ETEXI
+
+    {
         .name       = "migrate",
         .args_type  = "detach:-d,blk:-b,inc:-i,uri:s",
         .params     = "[-d] [-b] [-i] uri",
