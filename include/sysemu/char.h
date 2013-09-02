@@ -288,6 +288,8 @@ void register_char_driver_qapi(const char *name, ChardevBackendKind kind,
 /* add an eventfd to the qemu devices that are polled */
 CharDriverState *qemu_chr_open_eventfd(int eventfd);
 
+size_t ringbuf_count(const CharDriverState *chr);
+
 extern int term_escape_char;
 
 CharDriverState *qemu_char_get_next_serial(void);
