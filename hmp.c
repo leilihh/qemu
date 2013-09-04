@@ -1531,7 +1531,7 @@ typedef struct ConsoleStatus
 
 enum escape_char
 {
-    ESCAPE_CHAR_CTRL_GS = 0x1d /* ctrl-] is used for escape */
+    ESCAPE_CHAR_CTRL_GS = 97 /* ctrl-] is used for escape */
 };
 
 static void hmp_read_ringbuf_cb(void *opaque)
@@ -1550,15 +1550,16 @@ static void hmp_read_ringbuf_cb(void *opaque)
             return;
         }
         ringbuf_print_help(status->mon, data);
+        monitor_printf(status->mon, "\n");
         monitor_flush(status->mon);
         g_free(data);
         timer_mod(status->timer, qemu_clock_get_ms(QEMU_CLOCK_REALTIME) + 1000);
     } else {
         timer_del(status->timer);
+        g_free(status);
     }
 
     monitor_resume(status->mon);
-    g_free(status);
 }
 
 static void hmp_write_console(Monitor *mon, void *opaque)
