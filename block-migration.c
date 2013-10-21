@@ -834,7 +834,7 @@ SaveVMHandlers savevm_block_handlers = {
     .save_live_pending = block_save_pending,
     .load_state = block_load,
     .cancel = block_migration_cancel,
-    .is_active = block_is_active,
+    .is_block_active = block_is_active,
 };
 
 void blk_mig_init(void)

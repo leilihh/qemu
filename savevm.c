@@ -1867,8 +1867,8 @@ void qemu_savevm_state_begin(QEMUFile *f,
         if (!se->ops || !se->ops->save_live_setup) {
             continue;
         }
-        if (se->ops && se->ops->is_active) {
-            if (!se->ops->is_active(se->opaque)) {
+        if (se->ops && se->ops->is_block_active) {
+            if (!se->ops->is_block_active(se->opaque)) {
                 continue;
             }
         }
@@ -1907,8 +1907,8 @@ int qemu_savevm_state_iterate(QEMUFile *f)
         if (!se->ops || !se->ops->save_live_iterate) {
             continue;
         }
-        if (se->ops && se->ops->is_active) {
-            if (!se->ops->is_active(se->opaque)) {
+        if (se->ops && se->ops->is_block_active) {
+            if (!se->ops->is_block_active(se->opaque)) {
                 continue;
             }
         }
@@ -1948,8 +1948,8 @@ void qemu_savevm_state_complete(QEMUFile *f)
         if (!se->ops || !se->ops->save_live_complete) {
             continue;
         }
-        if (se->ops && se->ops->is_active) {
-            if (!se->ops->is_active(se->opaque)) {
+        if (se->ops && se->ops->is_block_active) {
+            if (!se->ops->is_block_active(se->opaque)) {
                 continue;
             }
         }
@@ -2002,8 +2002,8 @@ uint64_t qemu_savevm_state_pending(QEMUFile *f, uint64_t max_size)
         if (!se->ops || !se->ops->save_live_pending) {
             continue;
         }
-        if (se->ops && se->ops->is_active) {
-            if (!se->ops->is_active(se->opaque)) {
+        if (se->ops && se->ops->is_block_active) {
+            if (!se->ops->is_block_active(se->opaque)) {
                 continue;
             }
         }
