@@ -32,6 +32,8 @@
 #include "trace.h"
 #include "qemu/osdep.h"
 
+#define BEFORE_PIPE_FD 199
+
 //#define DEBUG_MIGRATION_LOCAL
 
 #ifdef DEBUG_MIGRATION_LOCAL
@@ -50,6 +52,8 @@ typedef struct QEMUFileLocal {
     bool unix_page_flipping;
 } QEMUFileLocal;
 
+static bool pipefd_passed;
+
 static int qemu_local_get_sockfd(void *opaque)
 {
     QEMUFileLocal *s = opaque;
@@ -64,6 +68,22 @@ static int qemu_local_get_buffer(void *opaque, uint8_t *buf,
     ssize_t len;
 
     for (;;) {
+        /*
+         * FIX ME: BEFORE_PIPE_FD is hard-coded and checked temporarily here
+         * because that the control message of passed pipe file descriptor
+         * might be 'eaten' to stream file by qemu_recv(), which would lead
+         * to the failure of recv_pipefd(), as it should stay in the socket
+         * and received by the real receiver recvmsg().
+         *
+         * Although this message is followed by the first load_hook flags
+         * RAM_SAVE_FLAG_HOOK, the incoming side is hardly to avoid this
+         * as it would fill it into the stream file before any check action
+         * taken. Need to find a way out to fix this.
+         */
+        if (size > BEFORE_PIPE_FD && !pipefd_passed) {
+            size = BEFORE_PIPE_FD;
+        }
+
         len = qemu_recv(s->sockfd, buf, size, 0);
         if (len != -1) {
             break;
@@ -115,6 +135,7 @@ static int qemu_local_close(void *opaque)
 }
 
 static int send_pipefd(int sockfd, int pipefd);
+static int recv_pipefd(int sockfd);
 
 static int qemu_local_send_pipefd(QEMUFile *f, void *opaque,
                                   uint64_t flags)
@@ -192,10 +213,74 @@ static size_t qemu_local_save_ram(QEMUFile *f, void *opaque,
     return RAM_SAVE_CONTROL_NOT_SUPP;
 }
 
+static int qemu_local_ram_load(QEMUFile *f, void *opaque,
+                               uint64_t flags)
+{
+    QEMUFileLocal *s = opaque;
+    ram_addr_t addr;
+    struct iovec iov;
+    ssize_t ret;
+
+    /* Receive the pipe file descripter passed from source process */
+    if (!pipefd_passed) {
+        s->pipefd[0] = recv_pipefd(s->sockfd);
+        if (s->pipefd[0] <= 0) {
+            fprintf(stderr, "failed to receive pipe fd: %d\n", s->pipefd[0]);
+        } else {
+            pipefd_passed = 1;
+            DPRINTF(stderr, "succeed\n");
+        }
+
+        return s->pipefd[0];
+    }
+
+    if (pipefd_passed) {
+        void *host;
+
+        /*
+         * Extract the page address from the 8-byte record and
+         * read the page data from the pipe.
+         */
+        addr = qemu_get_be64(s->file);
+        host = qemu_get_ram_ptr(addr);
+
+        iov.iov_base = host;
+        iov.iov_len = TARGET_PAGE_SIZE;
+
+        /* The flag SPLICE_F_MOVE is introduced in kernel for the page
+         * flipping feature in QEMU, which will movie pages rather than
+         * copying, previously unused.
+         *
+         * If a move is not possible the kernel will transparently falls
+         * back to copying data.
+         *
+         * For older kernels the SPLICE_F_MOVE would be ignored and a copy
+         * would occur.
+         */
+        ret = vmsplice(s->pipefd[0], &iov, 1, SPLICE_F_MOVE);
+        if (ret == -1) {
+            if (errno != EAGAIN && errno != EINTR) {
+                fprintf(stderr, "vmsplice() load error: %s", strerror(errno));
+                return ret;
+            }
+            DPRINTF("vmsplice load error\n");
+        } else if (ret == 0) {
+            DPRINTF(stderr, "load_page: zero read\n");
+        }
+
+        DPRINTF("vmsplice (read): %zu\n", ret);
+        return ret;
+    }
+
+    return 0;
+}
+
+
 static const QEMUFileOps pipe_read_ops = {
     .get_fd        = qemu_local_get_sockfd,
     .get_buffer    = qemu_local_get_buffer,
     .close         = qemu_local_close,
+    .hook_ram_load = qemu_local_ram_load
 };
 
 static const QEMUFileOps pipe_write_ops = {
