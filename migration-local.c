@@ -218,3 +218,67 @@ static int send_pipefd(int sockfd, int pipefd)
 
     return ret;
 }
+
+/*
+ * Receive a pipe file descriptor from a source process
+ * via unix socket.
+ *
+ * Return negative value if there has been an recvmsg error or
+ * no fd to be received. Return 0 if the connection closed by
+ * source. Return file descriptor on success.
+ *
+ */
+static int recv_pipefd(int sockfd)
+{
+    struct msghdr msg;
+    struct iovec iov[1];
+    ssize_t n;
+    int pipefd = -1;
+    char req[1];
+
+    union {
+      struct cmsghdr cm;
+      char control[CMSG_SPACE(sizeof(int))];
+    } control_un;
+    struct cmsghdr *cmptr;
+
+    msg.msg_control = control_un.control;
+    msg.msg_controllen = sizeof(control_un.control);
+
+    msg.msg_name = NULL;
+    msg.msg_namelen = 0;
+
+    iov[0].iov_base = req;
+    iov[0].iov_len = sizeof(req);
+    msg.msg_iov = iov;
+    msg.msg_iovlen = 1;
+
+    if ( (n = recvmsg(sockfd, &msg, 0)) <= 0) {
+        fprintf(stderr, "recvmsg error: %s\n", strerror(errno));
+        return n;
+    }
+
+    /* req 0x01 means there is a file descriptor to receive */
+    if (req[0] != 0x01) {
+        return pipefd;
+    }
+
+    if ( (cmptr = CMSG_FIRSTHDR(&msg)) != NULL &&
+        cmptr->cmsg_len == CMSG_LEN(sizeof(int))) {
+        if (cmptr->cmsg_level != SOL_SOCKET) {
+            DPRINTF(stderr, "control level != SOL_SOCKET\n");
+            return pipefd;
+        } else if (cmptr->cmsg_type != SCM_RIGHTS) {
+            DPRINTF(stderr, "control type != SCM_RIGHTS\n");
+            return pipefd;
+        }
+        /* The pipe file descriptor to be received */
+        pipefd = *((int *) CMSG_DATA(cmptr));
+        DPRINTF("pipefd received successfully: %d\n", pipefd);
+    } else {
+        /* Descriptor was not passed */
+        DPRINTF(stderr, "pipefd was not passed\n");
+    }
+
+    return pipefd;
+}
