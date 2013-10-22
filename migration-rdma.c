@@ -2154,10 +2154,10 @@ static inline int qemu_rdma_buffer_mergable(RDMAContext *rdma,
  *    qeueue instead of each individual chunk.
  */
 static int qemu_rdma_write(QEMUFile *f, RDMAContext *rdma,
-                           uint64_t block_offset, uint64_t offset,
+                           MemeoryRegion *mr, uint64_t offset,
                            uint64_t len)
 {
-    uint64_t current_addr = block_offset + offset;
+    uint64_t current_addr = mr->ram_addr + offset;
     uint64_t index = rdma->current_index;
     uint64_t chunk = rdma->current_chunk;
     int ret;
@@ -2699,7 +2699,7 @@ static int qemu_rdma_close(void *opaque)
  *                  the protocol because most transfers are sent asynchronously.
  */
 static size_t qemu_rdma_save_page(QEMUFile *f, void *opaque,
-                                  ram_addr_t block_offset, ram_addr_t offset,
+                                  MemoryRegion *mr, ram_addr_t offset,
                                   size_t size, int *bytes_sent)
 {
     QEMUFileRDMA *rfile = opaque;
