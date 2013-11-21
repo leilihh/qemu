@@ -19,6 +19,7 @@
 #include "migration/migration.h"
 #include "migration/qemu-file.h"
 #include "block/block.h"
+#include "sysemu/sysemu.h"
 
 //#define DEBUG_MIGRATION_UNIX
 
@@ -33,6 +34,7 @@
 static void unix_wait_for_connect(int fd, void *opaque)
 {
     MigrationState *s = opaque;
+    int ret;
 
     if (fd < 0) {
         DPRINTF("migrate connect error\n");
@@ -45,6 +47,15 @@ static void unix_wait_for_connect(int fd, void *opaque)
         if (s->file == NULL) {
             fprintf(stderr, "failed to open Unix socket\n");
             goto fail;
+        }
+
+        /* Stop VM before invoking migration if unix_page_flipping enabled */
+        if (migrate_unix_page_flipping()) {
+            ret = vm_stop_force_state(RUN_STATE_MEMORY_STALE);
+            if (ret < 0) {
+                DPRINTF("failed to stop VM\n");
+                goto fail;
+            }
         }
 
         migrate_fd_connect(s);
