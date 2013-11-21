@@ -176,12 +176,15 @@
 # @watchdog: the watchdog action is configured to pause and has been triggered
 #
 # @guest-panicked: guest has been panicked as a result of guest OS panic
+#
+# @memory-stale: guest is paused to start unix_page_flipping migration
+# process, the destination QEMU will has the newer contents of the memory
 ##
 { 'enum': 'RunState',
   'data': [ 'debug', 'inmigrate', 'internal-error', 'io-error', 'paused',
             'postmigrate', 'prelaunch', 'finish-migrate', 'restore-vm',
-            'running', 'save-vm', 'shutdown', 'suspended', 'watchdog',
-            'guest-panicked' ] }
+            'running', 'save-vm', 'shutdown', 'suspended', 'memory-stale',
+            'watchdog', 'guest-panicked' ] }
 
 ##
 # @SnapshotInfo
