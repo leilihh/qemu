@@ -114,6 +114,30 @@ static int qemu_local_close(void *opaque)
     return 0;
 }
 
+static int send_pipefd(int sockfd, int pipefd);
+
+static int qemu_local_send_pipefd(QEMUFile *f, void *opaque,
+                                  uint64_t flags)
+{
+    QEMUFileLocal *s = opaque;
+    int ret;
+
+    if (s->unix_page_flipping) {
+        /* Avoid sending pipe fd again in ram_save_complete() stage */
+        if (flags == RAM_CONTROL_SETUP) {
+            qemu_fflush(f);
+            ret = send_pipefd(s->sockfd, s->pipefd[0]);
+            if (ret < 0) {
+                fprintf(stderr, "failed to pass PIPE\n");
+                return ret;
+            }
+            DPRINTF("PIPE fd was sent\n");
+        }
+    }
+
+    return 0;
+}
+
 static const QEMUFileOps pipe_read_ops = {
     .get_fd        = qemu_local_get_sockfd,
     .get_buffer    = qemu_local_get_buffer,
@@ -124,6 +148,7 @@ static const QEMUFileOps pipe_write_ops = {
     .get_fd             = qemu_local_get_sockfd,
     .writev_buffer      = qemu_local_writev_buffer,
     .close              = qemu_local_close,
+    .before_ram_iterate = qemu_local_send_pipefd,
 };
 
 QEMUFile *qemu_fopen_socket_local(int sockfd, const char *mode)
