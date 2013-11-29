@@ -2938,7 +2938,7 @@ err_rdma_dest_wait:
  * Keep doing this until the source tells us to stop.
  */
 static int qemu_rdma_registration_handle(QEMUFile *f, void *opaque,
-                                         uint64_t flags)
+                                         ram_addr_t offset, uint64_t flags)
 {
     RDMAControlHeader reg_resp = { .len = sizeof(RDMARegisterResult),
                                .type = RDMA_CONTROL_REGISTER_RESULT,
