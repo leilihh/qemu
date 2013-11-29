@@ -661,12 +661,12 @@ void ram_control_load_hook(QEMUFile *f, uint64_t flags)
     }
 }
 
-size_t ram_control_save_page(QEMUFile *f, ram_addr_t block_offset,
-                         ram_addr_t offset, size_t size, int *bytes_sent)
+size_t ram_control_save_page(QEMUFile *f, MemoryRegion *mr, ram_addr_t offset,
+                             size_t size, int *bytes_sent)
 {
     if (f->ops->save_page) {
-        int ret = f->ops->save_page(f, f->opaque, block_offset,
-                                    offset, size, bytes_sent);
+        int ret = f->ops->save_page(f, f->opaque, mr, offset,
+                                    size, bytes_sent);
 
         if (ret != RAM_SAVE_CONTROL_DELAYED) {
             if (bytes_sent && *bytes_sent > 0) {

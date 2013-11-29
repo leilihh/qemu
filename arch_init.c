@@ -485,8 +485,8 @@ static int ram_save_block(QEMUFile *f, bool last_stage)
 
             /* In doubt sent page as normal */
             bytes_sent = -1;
-            ret = ram_control_save_page(f, block->offset,
-                               offset, TARGET_PAGE_SIZE, &bytes_sent);
+            ret = ram_control_save_page(f, mr, offset, TARGET_PAGE_SIZE,
+                                        &bytes_sent);
 
             if (ret != RAM_SAVE_CONTROL_NOT_SUPP) {
                 if (ret != RAM_SAVE_CONTROL_DELAYED) {
