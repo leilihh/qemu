@@ -685,10 +685,20 @@
 # @auto-converge: If enabled, QEMU will automatically throttle down the guest
 #          to speed up convergence of RAM migration. (since 1.6)
 #
+# @x-unix-page-flipping: If enabled, QEMU can optimize migration when the
+#          destination is a QEMU process that runs on the same host as
+#          the source (as is the case for live upgrade).  If the migration
+#          transport is a Unix socket, QEMU will flip RAM pages directly to
+#          the destination, so that memory is only allocated twice for the
+#          source and destination processes. Disabled by default.
+#          Experimental: will get rid of the x tag after further testing with
+#          the new vmsplice. (since 2.0)
+#
 # Since: 1.2
 ##
 { 'enum': 'MigrationCapability',
-  'data': ['xbzrle', 'x-rdma-pin-all', 'auto-converge', 'zero-blocks'] }
+  'data': ['xbzrle', 'x-rdma-pin-all', 'auto-converge', 'zero-blocks',
+           'x-unix-page-flipping'] }
 
 ##
 # @MigrationCapabilityStatus
