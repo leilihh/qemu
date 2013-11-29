@@ -65,6 +65,15 @@ typedef ssize_t (QEMUFileWritevBufferFunc)(void *opaque, struct iovec *iov,
 typedef int (QEMURamHookFunc)(QEMUFile *f, void *opaque, uint64_t flags);
 
 /*
+ * This function provides load hook for RAM migration, allows
+ * override of where the RAM page is loaded (such as page
+ * flipping for example).
+ */
+typedef int (QEMURamLoadHookFunc)(QEMUFile *f, void *opaque,
+                                  ram_addr_t addr,
+                                  uint64_t flags);
+
+/*
  * Constants used by ram_control_* hooks
  */
 #define RAM_CONTROL_SETUP    0
@@ -90,7 +99,7 @@ typedef struct QEMUFileOps {
     QEMUFileWritevBufferFunc *writev_buffer;
     QEMURamHookFunc *before_ram_iterate;
     QEMURamHookFunc *after_ram_iterate;
-    QEMURamHookFunc *hook_ram_load;
+    QEMURamLoadHookFunc *hook_ram_load;
     QEMURamSaveFunc *save_page;
 } QEMUFileOps;
 
