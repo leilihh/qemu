@@ -2699,7 +2699,7 @@ static int qemu_rdma_close(void *opaque)
  *                  the protocol because most transfers are sent asynchronously.
  */
 static size_t qemu_rdma_save_page(QEMUFile *f, void *opaque,
-                                  ram_addr_t block_offset, ram_addr_t offset,
+                                  MemoryRegion *mr, ram_addr_t offset,
                                   size_t size, int *bytes_sent)
 {
     QEMUFileRDMA *rfile = opaque;
@@ -2716,7 +2716,7 @@ static size_t qemu_rdma_save_page(QEMUFile *f, void *opaque,
          * is full, or the page doen't belong to the current chunk,
          * an actual RDMA write will occur and a new chunk will be formed.
          */
-        ret = qemu_rdma_write(f, rdma, block_offset, offset, size);
+        ret = qemu_rdma_write(f, rdma, mr->ram_addr, offset, size);
         if (ret < 0) {
             fprintf(stderr, "rdma migration: write error! %d\n", ret);
             goto err;

@@ -77,10 +77,10 @@ typedef int (QEMURamHookFunc)(QEMUFile *f, void *opaque, uint64_t flags);
  * is saved (such as RDMA, for example.)
  */
 typedef size_t (QEMURamSaveFunc)(QEMUFile *f, void *opaque,
-                               ram_addr_t block_offset,
-                               ram_addr_t offset,
-                               size_t size,
-                               int *bytes_sent);
+                                 MemoryRegion *mr,
+                                 ram_addr_t offset,
+                                 size_t size,
+                                 int *bytes_sent);
 
 typedef struct QEMUFileOps {
     QEMUFilePutBufferFunc *put_buffer;
