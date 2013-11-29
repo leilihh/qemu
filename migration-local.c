@@ -167,3 +167,49 @@ fail:
     g_free(s);
     return NULL;
 }
+
+
+/*
+ * Pass a pipe file descriptor to another process.
+ *
+ * Return negative value If pipefd < 0. Return 0 on
+ * success.
+ *
+ */
+static int send_pipefd(int sockfd, int pipefd)
+{
+    struct msghdr msg;
+    struct iovec iov[1];
+    ssize_t ret;
+    char req[1] = { 0x01 };
+
+    union {
+      struct cmsghdr cm;
+      char control[CMSG_SPACE(sizeof(int))];
+    } control_un;
+    struct cmsghdr *cmptr;
+
+    msg.msg_control = control_un.control;
+    msg.msg_controllen = sizeof(control_un.control);
+
+    cmptr = CMSG_FIRSTHDR(&msg);
+    cmptr->cmsg_len = CMSG_LEN(sizeof(int));
+    cmptr->cmsg_level = SOL_SOCKET;
+    cmptr->cmsg_type = SCM_RIGHTS;
+    *((int *) CMSG_DATA(cmptr)) = pipefd;
+
+    msg.msg_name = NULL;
+    msg.msg_namelen = 0;
+
+    iov[0].iov_base = req;
+    iov[0].iov_len = sizeof(req);
+    msg.msg_iov = iov;
+    msg.msg_iovlen = 1;
+
+    ret = sendmsg(sockfd, &msg, 0);
+    if (ret <= 0) {
+        DPRINTF("sendmsg error: %s\n", strerror(errno));
+    }
+
+    return ret;
+}
