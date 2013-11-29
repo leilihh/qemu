@@ -2898,6 +2898,10 @@ migrate-set-capabilities
 Enable/Disable migration capabilities
 
 - "xbzrle": XBZRLE support
+- "x-rdma-pin-all": Pin all pages during RDMA support
+- "zero-blocks": Compress zero blocks during block migration
+- "auto-converge": Block VCPU to help convergence of migration
+- "x-unix-page-flipping": Page flipping for live QEMU upgrade
 
 Arguments:
 
@@ -2922,6 +2926,10 @@ Query current migration capabilities
 
 - "capabilities": migration capabilities state
          - "xbzrle" : XBZRLE state (json-bool)
+         - "x-rdma-pin-all": RDMA state (json-bool)
+         - "zero-blocks": zero-blocks state (json-bool)
+         - "auto-converge": Auto converge state (json-bool)
+         - "x-unix-page-flipping": Page flipping state (json-bool)
 
 Arguments:
 
