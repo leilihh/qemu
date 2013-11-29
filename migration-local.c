@@ -116,6 +116,68 @@ static int qemu_local_close(void *opaque)
     return 0;
 }
 
+static int send_pipefd(int sockfd, int pipefd);
+
+static size_t qemu_local_save_ram(QEMUFile *f, void *opaque,
+                                  MemoryRegion *mr, ram_addr_t offset,
+                                  size_t size, int *bytes_sent)
+{
+    QEMUFileLocal *s = opaque;
+    ram_addr_t current_addr = mr->ram_addr + offset;
+    void *ram_addr;
+    ssize_t ret;
+
+    if (s->unix_page_flipping) {
+        qemu_put_be64(s->file, current_addr | RAM_SAVE_FLAG_HOOK);
+        qemu_fflush(s->file);
+
+        if (!s->pipefd_passed) {
+            ret = send_pipefd(s->sockfd, s->pipefd[0]);
+            if (ret < 0) {
+                fprintf(stderr, "failed to pass PIPE\n");
+                return ret;
+            }
+            s->pipefd_passed = true;
+        }
+
+        ram_addr = memory_region_get_ram_ptr(mr) + offset;
+
+        /* vmsplice page data to pipe */
+        struct iovec iov = {
+            .iov_base = ram_addr,
+            .iov_len  = size,
+        };
+
+        /*
+         * The flag SPLICE_F_MOVE is introduced in kernel for the page
+         * flipping feature in QEMU, which will move pages rather than
+         * copying, previously unused.
+         *
+         * If a move is not possible the kernel will transparently fall
+         * back to copying data.
+         *
+         * For older kernels the SPLICE_F_MOVE would be ignored and a copy
+         * would occur.
+         */
+
+        ret = vmsplice(s->pipefd[1], &iov, 1, SPLICE_F_GIFT | SPLICE_F_MOVE);
+        if (ret == -1) {
+            if (errno != EAGAIN && errno != EINTR) {
+                fprintf(stderr, "vmsplice save error: %s\n", strerror(errno));
+                return ret;
+            }
+        } else {
+            if (bytes_sent) {
+                *bytes_sent = size;
+            }
+            DPRINTF("block_offset: %lu, offset: %lu\n", mr->ram_addr, offset);
+            return 0;
+        }
+    }
+
+    return RAM_SAVE_CONTROL_NOT_SUPP;
+}
+
 static const QEMUFileOps pipe_read_ops = {
     .get_fd        = qemu_local_get_sockfd,
     .get_buffer    = qemu_local_get_buffer,
@@ -126,6 +188,7 @@ static const QEMUFileOps pipe_write_ops = {
     .get_fd             = qemu_local_get_sockfd,
     .writev_buffer      = qemu_local_writev_buffer,
     .close              = qemu_local_close,
+    .save_page          = qemu_local_save_ram
 };
 
 QEMUFile *qemu_fopen_socket_local(int sockfd, const char *mode)
