@@ -582,7 +582,7 @@ static void *migration_thread(void *opaque)
             if (pending_size && pending_size >= max_size) {
                 qemu_savevm_state_iterate(s->file);
             } else {
-                int ret;
+                int ret = 0;
 
                 DPRINTF("done iterating\n");
                 qemu_mutex_lock_iothread();
@@ -590,7 +590,10 @@ static void *migration_thread(void *opaque)
                 qemu_system_wakeup_request(QEMU_WAKEUP_REASON_OTHER);
                 old_vm_running = runstate_is_running();
 
-                ret = vm_stop_force_state(RUN_STATE_FINISH_MIGRATE);
+                if (!runstate_needs_reset()) {
+                    ret = vm_stop_force_state(RUN_STATE_FINISH_MIGRATE);
+                }
+
                 if (ret >= 0) {
                     qemu_file_set_rate_limit(s->file, INT_MAX);
                     qemu_savevm_state_complete(s->file);
