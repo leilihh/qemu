@@ -105,6 +105,12 @@ static int qemu_local_close(void *opaque)
     QEMUFileLocal *s = opaque;
 
     closesocket(s->sockfd);
+
+    if (s->unix_page_flipping) {
+        close(s->pipefd[0]);
+        close(s->pipefd[1]);
+    }
+
     g_free(s);
 
     return 0;
@@ -121,3 +127,43 @@ static const QEMUFileOps pipe_write_ops = {
     .writev_buffer      = qemu_local_writev_buffer,
     .close              = qemu_local_close,
 };
+
+QEMUFile *qemu_fopen_socket_local(int sockfd, const char *mode)
+{
+    QEMUFileLocal *s;
+    int pipefd[2];
+
+    if (qemu_file_mode_is_not_valid(mode)) {
+        return NULL;
+    }
+
+    s = g_malloc0(sizeof(QEMUFileLocal));
+    s->sockfd = sockfd;
+
+    if (migrate_unix_page_flipping()) {
+        s->unix_page_flipping = 1;
+    }
+
+    if (mode[0] == 'w') {
+        if (s->unix_page_flipping) {
+            if (pipe(pipefd) < 0) {
+                fprintf(stderr, "failed to create PIPE\n");
+                goto fail;
+            }
+
+            s->pipefd[0] = pipefd[0];
+            s->pipefd[1] = pipefd[1];
+        }
+
+        qemu_set_block(s->sockfd);
+        s->file = qemu_fopen_ops(s, &pipe_write_ops);
+    } else {
+        s->file = qemu_fopen_ops(s, &pipe_read_ops);
+    }
+
+    return s->file;
+
+fail:
+    g_free(s);
+    return NULL;
+}
