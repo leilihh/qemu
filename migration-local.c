@@ -59,16 +59,69 @@ static int qemu_local_get_sockfd(void *opaque)
     return s->sockfd;
 }
 
+static int unix_msgfd_lookup(void *opaque, struct msghdr *msg)
+{
+    QEMUFileLocal *s = opaque;
+    struct cmsghdr *cmsg;
+    bool found = false;
+
+    for (cmsg = CMSG_FIRSTHDR(msg); cmsg; cmsg = CMSG_NXTHDR(msg, cmsg)) {
+        if (cmsg->cmsg_len != CMSG_LEN(sizeof(int)) ||
+            cmsg->cmsg_level != SOL_SOCKET ||
+            cmsg->cmsg_type != SCM_RIGHTS)
+            continue;
+
+        /* PIPE file descriptor to be received */
+        s->pipefd[0] = *((int *)CMSG_DATA(cmsg));
+    }
+
+    if (s->pipefd[0] < 0) {
+        fprintf(stderr, "no pipe fd can be received\n");
+        return found;
+    }
+
+    DPRINTF("pipefd successfully received\n");
+    return s->pipefd[0];
+}
+
 static int qemu_local_get_buffer(void *opaque, uint8_t *buf,
                                  int64_t pos, int size)
 {
     QEMUFileLocal *s = opaque;
     ssize_t len;
+    struct msghdr msg = { NULL, };
+    struct iovec iov[1];
+    union {
+        struct cmsghdr cmsg;
+        char control[CMSG_SPACE(sizeof(int))];
+    } msg_control;
+
+    iov[0].iov_base = buf;
+    iov[0].iov_len = size;
+
+    msg.msg_iov = iov;
+    msg.msg_iovlen = 1;
+    msg.msg_control = &msg_control;
+    msg.msg_controllen = sizeof(msg_control);
 
     for (;;) {
-        len = qemu_recv(s->sockfd, buf, size, 0);
-        if (len != -1) {
-            break;
+        if (!s->pipefd_passed) {
+            /*
+             * recvmsg is called here to catch the control message for
+             * the exchange of PIPE file descriptor until it is received.
+             */
+            len = recvmsg(s->sockfd, &msg, 0);
+            if (len != -1) {
+                if (unix_msgfd_lookup(s, &msg) > 0) {
+                    s->pipefd_passed = 1;
+                }
+                break;
+            }
+        } else {
+            len = qemu_recv(s->sockfd, buf, size, 0);
+            if (len != -1) {
+                break;
+            }
         }
 
         if (socket_error() == EAGAIN) {
