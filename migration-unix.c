@@ -37,12 +37,22 @@ static void unix_wait_for_connect(int fd, void *opaque)
     if (fd < 0) {
         DPRINTF("migrate connect error\n");
         s->file = NULL;
-        migrate_fd_error(s);
+        goto fail;
     } else {
         DPRINTF("migrate connect success\n");
-        s->file = qemu_fopen_socket(fd, "wb");
+
+        s->file = qemu_fopen_socket_local(fd, "wb");
+        if (s->file == NULL) {
+            fprintf(stderr, "failed to open Unix socket\n");
+            goto fail;
+        }
+
         migrate_fd_connect(s);
+        return;
     }
+
+fail:
+    migrate_fd_error(s);
 }
 
 void unix_start_outgoing_migration(MigrationState *s, const char *path, Error **errp)
@@ -71,9 +81,9 @@ static void unix_accept_incoming_migration(void *opaque)
         goto out;
     }
 
-    f = qemu_fopen_socket(c, "rb");
+    f = qemu_fopen_socket_local(c, "rb");
     if (f == NULL) {
-        fprintf(stderr, "could not qemu_fopen socket\n");
+        fprintf(stderr, "failed to open Unix socket\n");
         goto out;
     }
 
