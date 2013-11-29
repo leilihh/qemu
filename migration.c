@@ -541,6 +541,15 @@ int64_t migrate_xbzrle_cache_size(void)
     return s->xbzrle_cache_size;
 }
 
+bool migrate_unix_page_flipping(void)
+{
+    MigrationState *s;
+
+    s = migrate_get_current();
+
+    return s->enabled_capabilities[MIGRATION_CAPABILITY_X_UNIX_PAGE_FLIPPING];
+}
+
 /* migration thread support */
 
 static void *migration_thread(void *opaque)
