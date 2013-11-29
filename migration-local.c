@@ -231,10 +231,69 @@ static size_t qemu_local_save_ram(QEMUFile *f, void *opaque,
     return RAM_SAVE_CONTROL_NOT_SUPP;
 }
 
+static int qemu_local_ram_load(QEMUFile *f, void *opaque,
+                               ram_addr_t addr, uint64_t flags)
+{
+    QEMUFileLocal *s = opaque;
+    struct iovec iov;
+    ssize_t ret = -EINVAL;
+
+    if (!s->pipefd_received) {
+        /*
+         * send_pipefd was called at this point, and it wrote one
+         * byte to the stream.
+         */
+        qemu_get_byte(s->file);
+        s->pipefd_received = true;
+    }
+
+    if (s->pipefd_passed) {
+        void *host;
+        /*
+         * Extract the page address from the 8-byte record and
+         * read the page data from the pipe.
+         */
+        host = qemu_get_ram_ptr(addr);
+
+        iov.iov_base = host;
+        iov.iov_len = TARGET_PAGE_SIZE;
+
+        /*
+         * The flag SPLICE_F_MOVE is introduced in kernel for the page
+         * flipping feature in QEMU, which will move pages rather than
+         * copying, previously unused.
+         *
+         * If a move is not possible the kernel will transparently fall
+         * back to copying data.
+         *
+         * For older kernels the SPLICE_F_MOVE would be ignored and a copy
+         * would occur.
+         */
+
+        ret = vmsplice(s->pipefd[0], &iov, 1, SPLICE_F_MOVE);
+        if (ret == -1) {
+            if (errno != EAGAIN && errno != EINTR) {
+                fprintf(stderr, "vmsplice() load error: %s", strerror(errno));
+                return ret;
+            }
+            DPRINTF("vmsplice load error\n");
+        } else if (ret == 0) {
+            DPRINTF(stderr, "load_page: zero read\n");
+        }
+
+        DPRINTF("vmsplice (read): %zu\n", ret);
+        return ret;
+    }
+
+    return -EINVAL;
+}
+
+
 static const QEMUFileOps pipe_read_ops = {
     .get_fd        = qemu_local_get_sockfd,
     .get_buffer    = qemu_local_get_buffer,
     .close         = qemu_local_close,
+    .hook_ram_load = qemu_local_ram_load
 };
 
 static const QEMUFileOps pipe_write_ops = {
