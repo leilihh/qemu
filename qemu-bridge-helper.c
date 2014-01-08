@@ -40,6 +40,7 @@
 #endif
 
 #include "qemu/queue.h"
+#include "qemu/fd-exchange.h"
 
 #include "net/tap-linux.h"
 
@@ -174,33 +175,6 @@ static void prep_ifreq(struct ifreq *ifr, const char *ifname)
     snprintf(ifr->ifr_name, IFNAMSIZ, "%s", ifname);
 }
 
-static int send_fd(int c, int fd)
-{
-    char msgbuf[CMSG_SPACE(sizeof(fd))];
-    struct msghdr msg = {
-        .msg_control = msgbuf,
-        .msg_controllen = sizeof(msgbuf),
-    };
-    struct cmsghdr *cmsg;
-    struct iovec iov;
-    char req[1] = { 0x00 };
-
-    cmsg = CMSG_FIRSTHDR(&msg);
-    cmsg->cmsg_level = SOL_SOCKET;
-    cmsg->cmsg_type = SCM_RIGHTS;
-    cmsg->cmsg_len = CMSG_LEN(sizeof(fd));
-    msg.msg_controllen = cmsg->cmsg_len;
-
-    iov.iov_base = req;
-    iov.iov_len = sizeof(req);
-
-    msg.msg_iov = &iov;
-    msg.msg_iovlen = 1;
-    memcpy(CMSG_DATA(cmsg), &fd, sizeof(fd));
-
-    return sendmsg(c, &msg, 0);
-}
-
 #ifdef CONFIG_LIBCAP
 static int drop_privileges(void)
 {
@@ -239,6 +213,7 @@ int main(int argc, char **argv)
     ACLList acl_list;
     int access_allowed, access_denied;
     int ret = EXIT_SUCCESS;
+    char req[1] = { 0x00 };
 
 #ifdef CONFIG_LIBCAP
     /* if we're run from an suid binary, immediately drop privileges preserving
@@ -424,7 +399,7 @@ int main(int argc, char **argv)
     }
 
     /* write fd to the domain socket */
-    if (send_fd(unixfd, fd) == -1) {
+    if (qemu_send_with_fd(unixfd, fd, &req, sizeof(req)) == -1) {
         fprintf(stderr, "failed to write fd to unix socket: %s\n",
                 strerror(errno));
         ret = EXIT_FAILURE;
