@@ -39,6 +39,7 @@
 #include "sysemu/sysemu.h"
 #include "qemu-common.h"
 #include "qemu/error-report.h"
+#include "qemu/fd-exchange.h"
 
 #include "net/tap.h"
 
@@ -385,40 +386,6 @@ static int launch_script(const char *setup_script, const char *ifname, int fd)
     return -1;
 }
 
-static int recv_fd(int c)
-{
-    int fd;
-    uint8_t msgbuf[CMSG_SPACE(sizeof(fd))];
-    struct msghdr msg = {
-        .msg_control = msgbuf,
-        .msg_controllen = sizeof(msgbuf),
-    };
-    struct cmsghdr *cmsg;
-    struct iovec iov;
-    uint8_t req[1];
-    ssize_t len;
-
-    cmsg = CMSG_FIRSTHDR(&msg);
-    cmsg->cmsg_level = SOL_SOCKET;
-    cmsg->cmsg_type = SCM_RIGHTS;
-    cmsg->cmsg_len = CMSG_LEN(sizeof(fd));
-    msg.msg_controllen = cmsg->cmsg_len;
-
-    iov.iov_base = req;
-    iov.iov_len = sizeof(req);
-
-    msg.msg_iov = &iov;
-    msg.msg_iovlen = 1;
-
-    len = recvmsg(c, &msg, 0);
-    if (len > 0) {
-        memcpy(&fd, CMSG_DATA(cmsg), sizeof(fd));
-        return fd;
-    }
-
-    return len;
-}
-
 static int net_bridge_run_helper(const char *helper, const char *bridge)
 {
     sigset_t oldmask, mask;
@@ -489,12 +456,11 @@ static int net_bridge_run_helper(const char *helper, const char *bridge)
 
     } else if (pid > 0) {
         int fd;
+        char req[1] = { 0x00 };
 
         close(sv[1]);
 
-        do {
-            fd = recv_fd(sv[0]);
-        } while (fd == -1 && errno == EINTR);
+        qemu_recv_with_fd(sv[0], &fd, &req, sizeof(req));
 
         close(sv[0]);
 
