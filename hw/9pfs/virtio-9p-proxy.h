@@ -24,11 +24,6 @@
 #define proxy_marshal(out_sg, offset, fmt, args...) \
     v9fs_marshal(out_sg, 1, offset, 0, fmt, ##args)
 
-union MsgControl {
-    struct cmsghdr cmsg;
-    char control[CMSG_SPACE(sizeof(int))];
-};
-
 typedef struct {
     uint32_t type;
     uint32_t size;

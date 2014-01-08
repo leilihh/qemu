@@ -23,6 +23,7 @@
 #include "qemu-common.h"
 #include "qemu/sockets.h"
 #include "qemu/xattr.h"
+#include "qemu/fd-exchange.h"
 #include "virtio-9p-marshal.h"
 #include "hw/9pfs/virtio-9p-proxy.h"
 #include "fsdev/virtio-9p-marshal.h"
@@ -200,48 +201,6 @@ static int read_request(int sockfd, struct iovec *iovec, ProxyHeader *header)
         return retval;
     }
     iovec->iov_len += header->size;
-    return 0;
-}
-
-static int send_fd(int sockfd, int fd)
-{
-    struct msghdr msg;
-    struct iovec iov;
-    int retval, data;
-    struct cmsghdr *cmsg;
-    union MsgControl msg_control;
-
-    iov.iov_base = &data;
-    iov.iov_len = sizeof(data);
-
-    memset(&msg, 0, sizeof(msg));
-    msg.msg_iov = &iov;
-    msg.msg_iovlen = 1;
-    /* No ancillary data on error */
-    if (fd < 0) {
-        /* fd is really negative errno if the request failed  */
-        data = fd;
-    } else {
-        data = V9FS_FD_VALID;
-        msg.msg_control = &msg_control;
-        msg.msg_controllen = sizeof(msg_control);
-
-        cmsg = &msg_control.cmsg;
-        cmsg->cmsg_len = CMSG_LEN(sizeof(fd));
-        cmsg->cmsg_level = SOL_SOCKET;
-        cmsg->cmsg_type = SCM_RIGHTS;
-        memcpy(CMSG_DATA(cmsg), &fd, sizeof(fd));
-    }
-
-    do {
-        retval = sendmsg(sockfd, &msg, 0);
-    } while (retval < 0 && errno == EINTR);
-    if (fd >= 0) {
-        close(fd);
-    }
-    if (retval < 0) {
-        return retval;
-    }
     return 0;
 }
 
@@ -784,11 +743,17 @@ static void usage(char *prog)
 static int process_reply(int sock, int type,
                          struct iovec *out_iovec, int retval)
 {
+    int data = V9FS_FD_VALID;
+
     switch (type) {
     case T_OPEN:
     case T_CREATE:
-        if (send_fd(sock, retval) < 0) {
+        if (qemu_send_with_fd(sock, retval, &data, sizeof(data)) < 0) {
             return -1;
+        } else {
+            if (retval >= 0) {
+                close(retval);
+            }
         }
         break;
     case T_MKNOD:
